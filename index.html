@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>静岡県 天気予報 + WBGT</title>
+<style>
+  :root {
+    --bg-1: #0b1d3a;
+    --bg-2: #1e3a8a;
+    --bg-3: #0ea5e9;
+    --panel: rgba(255, 255, 255, 0.10);
+    --panel-strong: rgba(255, 255, 255, 0.16);
+    --line: rgba(255, 255, 255, 0.20);
+    --text: #f8fafc;
+    --muted: #cbd5e1;
+    --accent: #38bdf8;
+    --safe: #22c55e;
+    --notice: #facc15;
+    --warn: #fb923c;
+    --danger: #ef4444;
+    --extreme: #991b1b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(56, 189, 248, 0.35), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(139, 92, 246, 0.25), transparent 60%),
+      linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 60%, #0b1d3a 100%);
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  header { margin-bottom: 18px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #e0f2fe; font-size: 0.85rem; font-weight: 700;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .lead { color: var(--muted); margin: 0; font-size: 0.95rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 14px 38px rgba(2, 8, 23, 0.35);
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 0.6fr auto;
+    gap: 12px;
+    align-items: end;
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  input, select, button {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 0.95rem;
+    border-radius: 12px;
+    border: 0;
+    font-family: inherit;
+  }
+  input, select {
+    background: rgba(255,255,255,0.95);
+    color: #0f172a;
+    font-weight: 700;
+  }
+  button {
+    cursor: pointer;
+    color: white;
+    font-weight: 800;
+    background: linear-gradient(135deg, #38bdf8, #2563eb);
+    box-shadow: 0 8px 20px rgba(56, 189, 248, 0.35);
+    min-width: 140px;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:disabled { opacity: 0.7; cursor: wait; }
+
+  .status {
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    min-height: 1.6em;
+  }
+  .status.error {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #fecaca;
+  }
+  .status.success {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #d1fae5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.3fr 0.7fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .now { padding: 22px; display: grid; gap: 18px; }
+  .now-head {
+    display: flex; justify-content: space-between;
+    align-items: flex-start; gap: 14px; flex-wrap: wrap;
+  }
+  .now-city { margin: 0; font-size: 1.4rem; font-weight: 800; }
+  .meta { color: var(--muted); font-size: 0.85rem; }
+  .now-main {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .emoji { font-size: 3.4rem; line-height: 1; }
+  .temp { font-size: clamp(2.4rem, 6vw, 3.6rem); font-weight: 800; line-height: 1; }
+  .desc { font-size: 1.05rem; font-weight: 700; color: #e0f2fe; }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 12px;
+  }
+  .metric .k { color: var(--muted); font-size: 0.82rem; margin-bottom: 6px; }
+  .metric .v { font-size: 1.25rem; font-weight: 800; line-height: 1.2; }
+  .metric.highlight {
+    background: rgba(255,255,255,0.13);
+    border-color: rgba(255,255,255,0.22);
+  }
+  .wbgt-pill {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 800;
+  }
+  .tips { padding: 22px; display: grid; gap: 12px; align-content: start; }
+  .tips h2 { margin: 0; font-size: 1.05rem; }
+  .tip-box {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 12px 14px;
+    color: #eff6ff;
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+
+  .forecast { padding: 18px; }
+  .forecast h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255,255,255,0.05);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 10px 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-size: 0.9rem;
+  }
+  th {
+    color: #dbeafe;
+    background: rgba(255,255,255,0.06);
+    font-weight: 700;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.04); }
+  .foot {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.7;
+  }
+
+  @media (max-width: 900px) {
+    .controls, .grid { grid-template-columns: 1fr; }
+    button { min-width: 100%; }
+    .now-head { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badges">
+      <div class="badge">🌤️ 静岡県専用</div>
+      <div class="badge">🏘️ 35市町対応（焼津市・川根本町を含む）</div>
+      <div class="badge">🥵 参考WBGT表示</div>
+    </div>
+    <h1>静岡県 天気予報 + WBGT</h1>
+    <p class="lead">静岡県内の市町を選んで、現在の天気と7日間予報、参考WBGTを確認できます。Open-Meteo の公開 API を利用しています。</p>
+  </header>
+
+  <section class="panel controls">
+    <div class="field">
+      <label for="cityFilter">市町名検索</label>
+      <input id="cityFilter" type="text" placeholder="例: 焼津、川根、伊豆" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="citySelect">市町一覧</label>
+      <select id="citySelect"></select>
+    </div>
+    <div class="field">
+      <label for="daysSelect">表示日数</label>
+      <select id="daysSelect">
+        <option value="3">3日</option>
+        <option value="5">5日</option>
+        <option value="7" selected>7日</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="loadBtn">予報を更新</button>
+    </div>
+  </section>
+
+  <div id="status" class="status">ページを読み込んでいます...</div>
+
+  <section class="grid">
+    <article class="panel now" id="nowCard">
+      <div class="now-head">
+        <div>
+          <div class="meta">現在の天気</div>
+          <h2 class="now-city" id="cityName">--</h2>
+        </div>
+        <div class="meta" id="updatedAt">読み込み待ち</div>
+      </div>
+      <div class="now-main">
+        <div class="emoji" id="weatherEmoji">⛅</div>
+        <div>
+          <div class="temp" id="currentTemp">--°C</div>
+          <div class="desc" id="weatherDesc">データ取得待ち</div>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">体感温度</div><div class="v" id="apparentTemp">--°C</div></div>
+        <div class="metric"><div class="k">降水量</div><div class="v" id="precip">-- mm</div></div>
+        <div class="metric"><div class="k">湿度</div><div class="v" id="humidity">--%</div></div>
+        <div class="metric"><div class="k">風速</div><div class="v" id="wind">-- km/h</div></div>
+        <div class="metric highlight">
+          <div class="k">参考WBGT</div>
+          <div class="v" id="wbgtValue">--°C</div>
+          <span id="wbgtBadge" class="wbgt-pill" style="background: var(--safe)">目安</span>
+        </div>
+      </div>
+    </article>
+
+    <aside class="panel tips">
+      <h2>ひとことアドバイス</h2>
+      <div class="tip-box" id="tipBox">天気データを取得すると、ここに服装・持ち物・暑さ対策の目安が表示されます。</div>
+      <div class="tip-box"><strong>朝の確認</strong><br><span id="morningHint">最高・最低気温、降水確率、風を確認しましょう。</span></div>
+      <div class="tip-box"><strong>日照と暑さ</strong><br><span id="sunHint">日の出・日の入りと、参考WBGTを表示します。</span></div>
+    </aside>
+  </section>
+
+  <section class="panel forecast">
+    <h2>日別予報</h2>
+    <div style="overflow:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>天気</th>
+            <th>最高 / 最低</th>
+            <th>降水確率</th>
+            <th>降水量</th>
+            <th>日の出 / 日の入り</th>
+          </tr>
+        </thead>
+        <tbody id="forecastBody">
+          <tr><td colspan="6">データを読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="foot">
+      データ取得元は Open-Meteo の予報 API です。参考WBGTは現在気温と相対湿度から湿球温度を近似した簡易目安で、屋外直射日光の影響は含みません。実測WBGTとは異なる場合があります。
+    </div>
+  </section>
+</div>
+
+<script>
+  // 市町データ（緯度経度をハードコードして地名検索 API を不要にする）
+  // これによりネットワーク経由の呼び出しが半分で済み、エラー発生箇所も減ります。
+  const cities = [
+    // 伊豆
+    { id: 'ito',        name: '伊東市',     region: '伊豆', lat: 34.9665, lon: 139.0989 },
+    { id: 'shimoda',    name: '下田市',     region: '伊豆', lat: 34.6794, lon: 138.9450 },
+    { id: 'izu',        name: '伊豆市',     region: '伊豆', lat: 34.9700, lon: 138.9447 },
+    { id: 'izunokuni',  name: '伊豆の国市', region: '伊豆', lat: 35.0420, lon: 138.9462 },
+    { id: 'higashiizu', name: '東伊豆町',   region: '伊豆', lat: 34.7793, lon: 139.0349 },
+    { id: 'kawazu',     name: '河津町',     region: '伊豆', lat: 34.7383, lon: 138.9920 },
+    { id: 'minamiizu',  name: '南伊豆町',   region: '伊豆', lat: 34.6479, lon: 138.8543 },
+    { id: 'matsuzaki',  name: '松崎町',     region: '伊豆', lat: 34.7521, lon: 138.7843 },
+    { id: 'nishiizu',   name: '西伊豆町',   region: '伊豆', lat: 34.7706, lon: 138.7820 },
+    // 東部
+    { id: 'numazu',     name: '沼津市',     region: '東部', lat: 35.0954, lon: 138.8634 },
+    { id: 'atami',      name: '熱海市',     region: '東部', lat: 35.0959, lon: 139.0738 },
+    { id: 'mishima',    name: '三島市',     region: '東部', lat: 35.1180, lon: 138.9183 },
+    { id: 'fujinomiya', name: '富士宮市',   region: '東部', lat: 35.2218, lon: 138.6209 },
+    { id: 'fuji',       name: '富士市',     region: '東部', lat: 35.1614, lon: 138.6764 },
+    { id: 'gotemba',    name: '御殿場市',   region: '東部', lat: 35.3088, lon: 138.9347 },
+    { id: 'susono',     name: '裾野市',     region: '東部', lat: 35.1734, lon: 138.9072 },
+    { id: 'kannami',    name: '函南町',     region: '東部', lat: 35.1226, lon: 138.9540 },
+    { id: 'shimizut',   name: '清水町',     region: '東部', lat: 35.1131, lon: 138.9070 },
+    { id: 'nagaizumi',  name: '長泉町',     region: '東部', lat: 35.1467, lon: 138.8888 },
+    { id: 'oyama',      name: '小山町',     region: '東部', lat: 35.3604, lon: 138.9776 },
+    // 中部
+    { id: 'shizuoka',   name: '静岡市',     region: '中部', lat: 34.9756, lon: 138.3828 },
+    { id: 'shimada',    name: '島田市',     region: '中部', lat: 34.8367, lon: 138.1759 },
+    { id: 'yaizu',      name: '焼津市',     region: '中部', lat: 34.8676, lon: 138.3236 },
+    { id: 'fujieda',    name: '藤枝市',     region: '中部', lat: 34.8676, lon: 138.2553 },
+    { id: 'makinohara', name: '牧之原市',   region: '中部', lat: 34.7396, lon: 138.2247 },
+    { id: 'yoshida',    name: '吉田町',     region: '中部', lat: 34.7794, lon: 138.2547 },
+    { id: 'kawanehon',  name: '川根本町',   region: '中部', lat: 35.0660, lon: 138.0837 },
+    // 西部
+    { id: 'hamamatsu',  name: '浜松市',     region: '西部', lat: 34.7108, lon: 137.7261 },
+    { id: 'iwata',      name: '磐田市',     region: '西部', lat: 34.7178, lon: 137.8511 },
+    { id: 'kakegawa',   name: '掛川市',     region: '西部', lat: 34.7689, lon: 137.9988 },
+    { id: 'fukuroi',    name: '袋井市',     region: '西部', lat: 34.7501, lon: 137.9251 },
+    { id: 'kosai',      name: '湖西市',     region: '西部', lat: 34.7148, lon: 137.5316 },
+    { id: 'omaezaki',   name: '御前崎市',   region: '西部', lat: 34.6359, lon: 138.2275 },
+    { id: 'kikugawa',   name: '菊川市',     region: '西部', lat: 34.7587, lon: 138.0858 },
+    { id: 'mori',       name: '森町',       region: '西部', lat: 34.8362, lon: 137.9261 }
+  ];
+
+  const regionOrder = ['伊豆', '東部', '中部', '西部'];
+
+  const weatherMap = {
+    0:  ['☀️', '快晴'],
+    1:  ['🌤️', 'おおむね晴れ'],
+    2:  ['⛅', '晴れ時々くもり'],
+    3:  ['☁️', 'くもり'],
+    45: ['🌫️', '霧'],
+    48: ['🌫️', '着氷性の霧'],
+    51: ['🌦️', '弱い霧雨'],
+    53: ['🌦️', '霧雨'],
+    55: ['🌧️', '強い霧雨'],
+    61: ['🌦️', '弱い雨'],
+    63: ['🌧️', '雨'],
+    65: ['🌧️', '強い雨'],
+    66: ['🌨️', '着氷性の弱い雨'],
+    67: ['🌨️', '着氷性の強い雨'],
+    71: ['🌨️', '弱い雪'],
+    73: ['❄️', '雪'],
+    75: ['❄️', '強い雪'],
+    77: ['🌨️', '雪粒'],
+    80: ['🌦️', 'にわか雨'],
+    81: ['🌧️', 'やや強いにわか雨'],
+    82: ['⛈️', '激しいにわか雨'],
+    85: ['🌨️', 'にわか雪'],
+    86: ['❄️', '激しいにわか雪'],
+    95: ['⛈️', '雷雨'],
+    96: ['⛈️', '雷雨とひょう'],
+    99: ['⛈️', '激しい雷雨とひょう']
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const cityFilter = $('cityFilter');
+  const citySelect = $('citySelect');
+  const daysSelect = $('daysSelect');
+  const loadBtn    = $('loadBtn');
+  const statusEl   = $('status');
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function fmtTemp(v) { return `${Math.round(v)}°C`; }
+  function info(code) { return weatherMap[code] || ['🌈', `天気コード ${code}`]; }
+  function fmtDate(d) {
+    return new Intl.DateTimeFormat('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' }).format(new Date(d + 'T00:00:00'));
+  }
+  function fmtTime(d) {
+    return new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date(d));
+  }
+
+  function getSelected() {
+    return cities.find(c => c.id === citySelect.value);
+  }
+
+  function renderOptions(filter) {
+    const keyword = (filter || '').trim();
+    const current = citySelect.value;
+    const filtered = cities.filter(c => !keyword || c.name.includes(keyword) || c.region.includes(keyword));
+    citySelect.innerHTML = '';
+    regionOrder.forEach(region => {
+      const items = filtered.filter(c => c.region === region);
+      if (!items.length) return;
+      const group = document.createElement('optgroup');
+      group.label = region;
+      items.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        if (c.id === current) opt.selected = true;
+        group.appendChild(opt);
+      });
+      citySelect.appendChild(group);
+    });
+    if (!citySelect.value && citySelect.options.length) {
+      citySelect.options[0].selected = true;
+    }
+  }
+
+  // WBGT 簡易近似（Stull 1995 の湿球温度近似 → 0.7 * Tw + 0.3 * Ta）
+  function wetBulb(tC, rh) {
+    const RH = Math.min(99, Math.max(1, rh));
+    return tC * Math.atan(0.151977 * Math.sqrt(RH + 8.313659))
+         + Math.atan(tC + RH)
+         - Math.atan(RH - 1.676331)
+         + 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH)
+         - 4.686035;
+  }
+  function wbgt(tC, rh) {
+    return 0.7 * wetBulb(tC, rh) + 0.3 * tC;
+  }
+  function wbgtCategory(v) {
+    if (v >= 31) return { label: '危険',     color: 'var(--extreme)', advice: '運動は原則中止。涼しい場所で休んでください。' };
+    if (v >= 28) return { label: '厳重警戒', color: 'var(--danger)',  advice: '激しい運動は避け、こまめに休憩を。' };
+    if (v >= 25) return { label: '警戒',     color: 'var(--warn)',    advice: '積極的に休憩し、水分と塩分を補給しましょう。' };
+    if (v >= 21) return { label: '注意',     color: 'var(--notice)',  advice: '水分補給を意識して無理を避けましょう。' };
+    return        { label: 'ほぼ安全', color: 'var(--safe)',    advice: '通常活動は問題なし。水分補給は続けましょう。' };
+  }
+
+  function buildTip(current, daily, wInfo) {
+    const tmax = daily.temperature_2m_max[0];
+    const pop  = daily.precipitation_probability_max[0];
+    const wind = current.wind_speed_10m;
+    const parts = [];
+    if (tmax >= 30) parts.push('暑さが強めです。こまめな水分補給を。');
+    else if (tmax <= 10) parts.push('冷え込みそうです。上着を用意しましょう。');
+    else parts.push('日中と朝晩の寒暖差に合わせて服装を調整しましょう。');
+    if (pop >= 60) parts.push('雨の可能性が高いので傘があると安心です。');
+    else if (pop >= 30) parts.push('にわか雨に備えて折りたたみ傘が便利です。');
+    if (wind >= 25) parts.push('風が強めなので屋外移動にご注意ください。');
+    parts.push(`参考WBGTは「${wInfo.label}」です。${wInfo.advice}`);
+    return parts.join(' ');
+  }
+
+  async function fetchWeather(lat, lon, days) {
+    const params = new URLSearchParams({
+      latitude: String(lat),
+      longitude: String(lon),
+      timezone: 'Asia/Tokyo',
+      forecast_days: String(days),
+      current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset'
+    });
+    const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      throw new Error(`API へ接続できません（${e.message}）。ブラウザのコンソールも確認してください。`);
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+    }
+    return res.json();
+  }
+
+  function renderNow(city, data) {
+    const cur = data.current;
+    const [emoji, desc] = info(cur.weather_code);
+    const w = wbgt(cur.temperature_2m, cur.relative_humidity_2m);
+    const wInfo = wbgtCategory(w);
+
+    $('cityName').textContent = `${city.name}（${city.region}）`;
+    const now = new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date());
+    $('updatedAt').textContent = `観測時刻 ${fmtTime(cur.time)} / 取得 ${now}`;
+    $('weatherEmoji').textContent = emoji;
+    $('currentTemp').textContent = fmtTemp(cur.temperature_2m);
+    $('weatherDesc').textContent = desc;
+    $('apparentTemp').textContent = fmtTemp(cur.apparent_temperature);
+    $('precip').textContent = `${cur.precipitation.toFixed(1)} mm`;
+    $('humidity').textContent = `${Math.round(cur.relative_humidity_2m)}%`;
+    $('wind').textContent = `${Math.round(cur.wind_speed_10m)} km/h`;
+    $('wbgtValue').textContent = `${w.toFixed(1)}°C`;
+    const badge = $('wbgtBadge');
+    badge.textContent = wInfo.label;
+    badge.style.background = wInfo.color;
+
+    $('tipBox').textContent = buildTip(cur, data.daily, wInfo);
+    $('morningHint').textContent = `今日の降水確率は最大 ${data.daily.precipitation_probability_max[0]}%、最高 ${Math.round(data.daily.temperature_2m_max[0])}°C / 最低 ${Math.round(data.daily.temperature_2m_min[0])}°C。`;
+    $('sunHint').textContent = `日の出 ${fmtTime(data.daily.sunrise[0])} / 日の入り ${fmtTime(data.daily.sunset[0])} / 参考WBGT ${w.toFixed(1)}°C`;
+  }
+
+  function renderForecast(daily) {
+    const body = $('forecastBody');
+    body.innerHTML = '';
+    daily.time.forEach((d, i) => {
+      const [emoji, desc] = info(daily.weather_code[i]);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${fmtDate(d)}</td>
+        <td>${emoji} ${desc}</td>
+        <td>${Math.round(daily.temperature_2m_max[i])}° / ${Math.round(daily.temperature_2m_min[i])}°</td>
+        <td>${daily.precipitation_probability_max[i] ?? '-'}%</td>
+        <td>${(daily.precipitation_sum[i] ?? 0).toFixed(1)} mm</td>
+        <td>${fmtTime(daily.sunrise[i])} / ${fmtTime(daily.sunset[i])}</td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+
+  async function load() {
+    const city = getSelected();
+    if (!city) {
+      setStatus('市町を選択してください。', 'error');
+      return;
+    }
+    const days = Number(daysSelect.value);
+    loadBtn.disabled = true;
+    setStatus(`${city.name} の予報を取得しています...`);
+    try {
+      const data = await fetchWeather(city.lat, city.lon, days);
+      renderNow(city, data);
+      renderForecast(data.daily);
+      setStatus(`${city.name} の予報を表示しました。`, 'success');
+    } catch (err) {
+      console.error(err);
+      setStatus(`取得に失敗しました: ${err.message}`, 'error');
+      $('forecastBody').innerHTML = '<tr><td colspan="6">予報を表示できませんでした。</td></tr>';
+    } finally {
+      loadBtn.disabled = false;
+    }
+  }
+
+  // グローバルエラーも画面に出す
+  window.addEventListener('error', e => setStatus(`スクリプトエラー: ${e.message}`, 'error'));
+  window.addEventListener('unhandledrejection', e => {
+    const msg = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+    setStatus(`非同期エラー: ${msg}`, 'error');
+  });
+
+  cityFilter.addEventListener('input', () => renderOptions(cityFilter.value));
+  citySelect.addEventListener('change', load);
+  daysSelect.addEventListener('change', load);
+  loadBtn.addEventListener('click', load);
+
+  // 初期化
+  try {
+    renderOptions();
+    // 初期値は静岡市
+    citySelect.value = 'shizuoka';
+    setStatus('準備完了。「予報を更新」を押すか市町を選ぶとデータを取得します。');
+    load();
+  } catch (e) {
+    setStatus(`初期化エラー: ${e.message}`, 'error');
+    console.error(e);
+  }
+</script>
+</body>
+</html>
